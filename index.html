@@ -176,11 +176,12 @@
                 id: 'nyc-hotel-pending',
                 type: 'hotel',
                 date: 'Aug 25–27',
-                description: 'Hotel stay in NYC',
+                description: 'Hotel stay in NYC (Park Lane Hotel)',
                 details: {
-                    'Status': 'to be confirmed'
+                    'Status': 'to be confirmed',
+                    'Hotel': 'Park Lane Hotel'
                 },
-                location: { name: 'New York City', lat: 40.7128, lng: -74.0060 },
+                location: { name: 'New York City (Park Lane)', lat: 40.7652, lng: -73.9749 }, // Park Lane Hotel coordinates
                 status: 'pending'
             },
             {
@@ -280,7 +281,7 @@
             switch (type) {
                 case 'flight': return '✈️';
                 case 'hotel': return '🏨';
-                case 'car': return '�';
+                case 'car': return '🚗';
                 case 'accommodation': return '🏡';
                 case 'travel': return '🚌';
                 default: return '📍';
@@ -334,7 +335,20 @@
                 return;
             }
 
+            // Check if map container has dimensions before initializing
+            const mapElement = document.getElementById('map');
+            if (!mapElement || mapElement.offsetWidth === 0 || mapElement.offsetHeight === 0) {
+                console.warn("Map container not ready or visible (offsetWidth/offsetHeight are zero). Retrying initialization.");
+                setTimeout(initializeMap, 200); // Retry after 200ms
+                return;
+            }
+
             try {
+                // Destroy existing map instance if it exists to prevent issues on re-initialization
+                if (map) {
+                    map.remove();
+                }
+
                 map = L.map('map').setView([38.0, -95.0], 4); // Centered roughly on the US
 
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -413,6 +427,8 @@
                                 tooltipText += `<br>Booking #: ${item.details['Booking #']}`;
                             } else if (item.details['Confirmation #']) {
                                 tooltipText += `<br>Confirmation #: ${item.details['Confirmation #']}`;
+                            } else if (item.details['Address']) { // Include address for accommodations
+                                tooltipText += `<br>Address: ${item.details['Address']}`;
                             }
                             markerInstance.bindTooltip(tooltipText, { permanent: false, direction: 'top', className: 'bg-white text-gray-800 p-2 rounded-md shadow-md text-sm' });
                         }
@@ -454,7 +470,13 @@
                             opacity: 0.7
                         }).addTo(map);
 
-                        polyline.bindTooltip(`<b>${item.description}</b><br>${item.date}`, { permanent: false, direction: 'auto' });
+                        // Construct tooltip text for travel legs including PNRs/confirmation numbers
+                        let polylineTooltipText = `<b>${item.description}</b><br>${item.date}`;
+                        for (const key in item.details) {
+                            polylineTooltipText += `<br><span class="font-medium">${key}:</span> ${item.details[key]}`;
+                        }
+
+                        polyline.bindTooltip(polylineTooltipText, { permanent: false, direction: 'auto', className: 'bg-white text-gray-800 p-2 rounded-md shadow-md text-sm' });
                         // Add all points of the curved path to bounds for fitting the map
                         curvedPath.forEach(point => bounds.push([point.lat, point.lng]));
                     }
@@ -466,7 +488,21 @@
                 }
 
                 // Invalidate map size after everything is loaded and rendered
-                map.invalidateSize();
+                // This is crucial for maps within dynamically sized containers or iframes
+                setTimeout(() => {
+                    if (map) {
+                        map.invalidateSize();
+                        console.log("map.invalidateSize() called after delay.");
+                    }
+                }, 200); // A slightly longer delay to ensure layout is stable
+
+                // Add a resize listener to invalidate map size on window resize
+                window.addEventListener('resize', () => {
+                    if (map) {
+                        map.invalidateSize();
+                        console.log("map.invalidateSize() called on window resize.");
+                    }
+                });
 
             } catch (error) {
                 console.error("Error initializing map:", error);
@@ -491,3 +527,4 @@
     </script>
 </body>
 </html>
+

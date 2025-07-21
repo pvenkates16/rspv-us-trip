@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prabhu & Rama Travel Itinerary</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts - Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Light gray background */
+        }
+        #map {
+            height: 500px; /* Default height for the map */
+            width: 100%;
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-xl */
+        }
+        /* Custom styles for Leaflet popups to match Tailwind aesthetics */
+        .leaflet-popup-content-wrapper {
+            border-radius: 0.5rem; /* rounded-lg */
+            padding: 0.75rem 1rem; /* p-3 px-4 */
+            font-size: 0.875rem; /* text-sm */
+            line-height: 1.25rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-md */
+        }
+        .leaflet-popup-content {
+            color: #1f2937; /* text-gray-800 */
+        }
+        .leaflet-popup-tip {
+            background: #ffffff; /* bg-white */
+        }
+        .itinerary-item.completed {
+            border-left: 4px solid #10b981; /* green-500 */
+        }
+        .itinerary-item.pending {
+            border-left: 4px solid #f59e0b; /* amber-500 */
+        }
+        .itinerary-item.completed .status-dot {
+            background-color: #10b981; /* green-500 */
+        }
+        .itinerary-item.pending .status-dot {
+            background-color: #f59e0b; /* amber-500 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl">
+        <!-- Header Section -->
+        <header class="text-center mb-10 bg-white p-6 rounded-xl shadow-lg">
+            <h1 class="text-4xl font-extrabold text-indigo-700 mb-2">🧭 Trip Summary: Prabhu & Rama</h1>
+            <p class="text-lg text-gray-600">
+                <span class="font-semibold">Dates:</span> July 31 – September 3
+            </p>
+            <p class="text-lg text-gray-600">
+                <span class="font-semibold">Home Base:</span> Copenhagen
+            </p>
+            <p class="text-lg text-gray-600">
+                <span class="font-semibold">Destinations:</span> D.C. → NYC → Acadia → Atlanta → Douglasville → Baltimore
+            </p>
+        </header>
+
+        <!-- Main Content Area: Itinerary and Map -->
+        <!-- Changed grid to span full width on all screen sizes -->
+        <div class="grid grid-cols-1 gap-8">
+            <!-- Map Section - now comes first and spans full width -->
+            <section>
+                <h2 class="text-3xl font-bold text-gray-800 mb-6">🗺️ Trip Map</h2>
+                <div id="map"></div>
+            </section>
+
+            <!-- Itinerary List Section - now comes second -->
+            <section>
+                <h2 class="text-3xl font-bold text-gray-800 mb-6">✅ Completed Plans</h2>
+                <div id="itinerary-list-completed" class="space-y-6">
+                    <!-- Itinerary items will be injected here by JavaScript -->
+                </div>
+
+                <h2 class="text-3xl font-bold text-gray-800 mt-10 mb-6">⬜️ Still Pending</h2>
+                <div id="itinerary-list-pending" class="space-y-6">
+                    <!-- Pending itinerary items will be injected here by JavaScript -->
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Custom JavaScript (moved to the end of body to ensure L is defined) -->
+    <script>
+        // Itinerary Data with geographical coordinates
+        const itineraryData = [
+            {
+                id: 'cph-dc-flight',
+                type: 'flight',
+                date: 'July 31',
+                description: 'SAS 925 — Copenhagen → Washington D.C.',
+                details: {
+                    'Prabhu PNR': 'ZEXGDQ',
+                    'Rama PNR': 'ZYPM8Q'
+                },
+                from: { name: 'Copenhagen', lat: 55.6761, lng: 12.5683 },
+                to: { name: 'Washington D.C.', lat: 38.9072, lng: -77.0369 },
+                status: 'completed'
+            },
+            {
+                id: 'bethesda-stay',
+                type: 'accommodation',
+                date: 'Aug 1–13',
+                description: 'Stay in Bethesda, MD',
+                details: {
+                    'Address': '7705 Marbury Rd'
+                },
+                location: { name: 'Bethesda, MD', lat: 38.9807, lng: -77.0990 },
+                status: 'completed'
+            },
+            {
+                id: 'dc-nyc-bus',
+                type: 'travel',
+                date: 'Aug 13',
+                description: 'Vamoose Bus — D.C. → NYC (both)',
+                details: {
+                    'Status': 'Still Pending'
+                },
+                from: { name: 'Washington D.C.', lat: 38.9072, lng: -77.0369 },
+                to: { name: 'New York City', lat: 40.7128, lng: -74.0060 },
+                status: 'pending'
+            },
+            {
+                id: 'nyc-smyth-tribeca',
+                type: 'hotel',
+                date: 'Aug 13–19',
+                description: 'Smyth Tribeca, NYC',
+                details: {
+                    'Booking #': 'Opodo 23641559035'
+                },
+                location: { name: 'New York City', lat: 40.7128, lng: -74.0060 },
+                status: 'completed'
+            },
+            {
+                id: 'nyc-bar-harbor-drive',
+                type: 'car',
+                date: 'Aug 19',
+                description: 'Drive to Bar Harbor, ME (in Scott’s car)',
+                details: {},
+                from: { name: 'New York City', lat: 40.7128, lng: -74.0060 },
+                to: { name: 'Bar Harbor, ME (Acadia)', lat: 44.3876, lng: -68.2039 },
+                status: 'completed'
+            },
+            {
+                id: 'acadia-bluenose-inn',
+                type: 'hotel',
+                date: 'Aug 19–25',
+                description: 'Bluenose Inn, Acadia National Park',
+                details: {},
+                location: { name: 'Bar Harbor, ME (Acadia)', lat: 44.3876, lng: -68.2039 },
+                status: 'completed'
+            },
+            {
+                id: 'bar-harbor-nyc-drive',
+                type: 'car',
+                date: 'Aug 25',
+                description: 'Drive back to NYC',
+                details: {},
+                from: { name: 'Bar Harbor, ME (Acadia)', lat: 44.3876, lng: -68.2039 },
+                to: { name: 'New York City', lat: 40.7128, lng: -74.0060 },
+                status: 'completed'
+            },
+            {
+                id: 'nyc-hotel-pending',
+                type: 'hotel',
+                date: 'Aug 25–27',
+                description: 'Hotel stay in NYC',
+                details: {
+                    'Status': 'to be confirmed'
+                },
+                location: { name: 'New York City', lat: 40.7128, lng: -74.0060 },
+                status: 'pending'
+            },
+            {
+                id: 'nyc-atl-flight-rama',
+                type: 'flight',
+                date: 'Aug 27',
+                description: 'Rama: DL 990 — NYC → Atlanta',
+                details: {
+                    'PNR': 'H8CQV6'
+                },
+                from: { name: 'New York City', lat: 40.7128, lng: -74.0060 },
+                to: { name: 'Atlanta', lat: 33.7490, lng: -84.3880 },
+                status: 'completed'
+            },
+            {
+                id: 'nyc-atl-flight-prabhu',
+                type: 'flight',
+                date: 'Aug 27',
+                description: 'Prabhu: F9 4347 — NYC → Atlanta',
+                details: {
+                    'PNR': 'T8FDKR'
+                },
+                from: { name: 'New York City', lat: 40.7128, lng: -74.0060 },
+                to: { name: 'Atlanta', lat: 33.7490, lng: -84.3880 },
+                status: 'completed'
+            },
+            {
+                id: 'atlanta-intercontinental',
+                type: 'hotel',
+                date: 'Aug 27–30',
+                description: 'InterContinental Buckhead, Atlanta',
+                details: {
+                    'Confirmation #': 'Holidex 85986609'
+                },
+                location: { name: 'Atlanta', lat: 33.7490, lng: -84.3880 },
+                status: 'completed'
+            },
+            {
+                id: 'atlanta-douglasville-drive',
+                type: 'car',
+                date: 'Aug 30',
+                description: 'Drive to Douglasville',
+                details: {},
+                from: { name: 'Atlanta', lat: 33.7490, lng: -84.3880 },
+                to: { name: 'Douglasville', lat: 33.7548, lng: -84.7394 },
+                status: 'completed'
+            },
+            {
+                id: 'douglasville-retreat',
+                type: 'accommodation',
+                date: 'Aug 30–Sep 1',
+                description: 'Retreat at Preserve.life, Douglasville',
+                details: {},
+                location: { name: 'Douglasville', lat: 33.7548, lng: -84.7394 },
+                status: 'completed'
+            },
+            {
+                id: 'douglasville-atl-airport-drive',
+                type: 'car',
+                date: 'Sep 1',
+                description: 'Drive to ATL Airport',
+                details: {},
+                from: { name: 'Atlanta', lat: 33.7490, lng: -84.3880 },
+                to: { name: 'Atlanta Airport', lat: 33.6407, lng: -84.4277 },
+                status: 'completed'
+            },
+            {
+                id: 'atl-baltimore-flight',
+                type: 'flight',
+                date: 'Sep 1',
+                description: 'DL 1257 — Atlanta → Baltimore',
+                details: {
+                    'Prabhu PNR': 'F6LXXX',
+                    'Rama PNR': 'ZYPM8Q'
+                },
+                from: { name: 'Atlanta', lat: 33.7490, lng: -84.3880 },
+                to: { name: 'Baltimore', lat: 39.2904, lng: -76.6122 },
+                status: 'completed'
+            },
+            {
+                id: 'dc-cph-flight',
+                type: 'flight',
+                date: 'Sep 3',
+                description: 'SAS 926 — Washington D.C. → Copenhagen',
+                details: {
+                    'Prabhu PNR': 'ZEXGDQ',
+                    'Rama PNR': 'ZYPM8Q'
+                },
+                from: { name: 'Washington D.C.', lat: 38.9072, lng: -77.0369 },
+                to: { name: 'Copenhagen', lat: 55.6761, lng: 12.5683 },
+                status: 'completed'
+            }
+        ];
+
+        // Function to get icon based on type
+        function getIcon(type) {
+            switch (type) {
+                case 'flight': return '✈️';
+                case 'hotel': return '🏨';
+                case 'car': return '�';
+                case 'accommodation': return '🏡';
+                case 'travel': return '🚌';
+                default: return '📍';
+            }
+        }
+
+        // Function to render itinerary list
+        function renderItinerary() {
+            const completedList = document.getElementById('itinerary-list-completed');
+            const pendingList = document.getElementById('itinerary-list-pending');
+
+            itineraryData.forEach(item => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = `itinerary-item bg-white p-5 rounded-xl shadow-md flex items-start space-x-4 transition duration-300 ease-in-out hover:shadow-lg ${item.status}`;
+
+                let detailsHtml = '';
+                for (const key in item.details) {
+                    detailsHtml += `<p class="text-gray-600 text-sm"><span class="font-medium">${key}:</span> ${item.details[key]}</p>`;
+                }
+
+                itemDiv.innerHTML = `
+                    <div class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center status-dot text-lg">
+                        ${getIcon(item.type)}
+                    </div>
+                    <div>
+                        <p class="text-sm font-semibold text-gray-500">${item.date}</p>
+                        <h3 class="text-lg font-bold text-gray-900">${item.description}</h3>
+                        ${detailsHtml}
+                    </div>
+                `;
+
+                if (item.status === 'completed') {
+                    completedList.appendChild(itemDiv);
+                } else {
+                    pendingList.appendChild(itemDiv);
+                }
+            });
+        }
+
+        // Initialize Map
+        let map;
+        function initializeMap() {
+            // Log the type of L right before using it for debugging
+            console.log('Inside initializeMap, typeof L:', typeof L);
+
+            // Add a robust check for Leaflet (L) object
+            if (typeof L === 'undefined' || L === null) {
+                console.error("Leaflet (L) is not defined or null. Retrying map initialization...");
+                // Retry after a short delay if L is not defined
+                setTimeout(initializeMap, 100); // Retry after 100ms
+                return;
+            }
+
+            try {
+                map = L.map('map').setView([38.0, -95.0], 4); // Centered roughly on the US
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                }).addTo(map);
+
+                const uniqueLocations = new Map(); // To store unique locations and their markers
+                const handledRoutes = new Map(); // To track routes for alternating curve direction
+                const bounds = []; // To store all coordinates for fitting the map
+
+                // Function to calculate a curved path for a polyline
+                function getCurvedPath(startLat, startLng, endLat, endLng, curveMagnitude, offsetDirection) {
+                    const start = L.latLng(startLat, startLng);
+                    const end = L.latLng(endLat, endLng);
+
+                    // Calculate midpoint
+                    const midLat = (startLat + endLat) / 2;
+                    const midLng = (startLng + endLng) / 2;
+
+                    // Calculate vector from start to end
+                    const dx = endLat - startLat;
+                    const dy = endLng - startLng;
+
+                    // Calculate perpendicular vector (normalized)
+                    const length = Math.sqrt(dx * dx + dy * dy);
+                    let perpDx = -dy / length;
+                    let perpDy = dx / length;
+
+                    // Apply offset direction (1 or -1)
+                    perpDx *= offsetDirection;
+                    perpDy *= offsetDirection;
+
+                    // Calculate control point
+                    const controlLat = midLat + perpDx * curveMagnitude;
+                    const controlLng = midLng + perpDy * curveMagnitude;
+
+                    return [start, L.latLng(controlLat, controlLng), end];
+                }
+
+                itineraryData.forEach(item => {
+                    let popupContent = `<h4 class="font-bold">${item.description}</h4><p class="text-xs text-gray-600">${item.date}</p>`;
+                    for (const key in item.details) {
+                        popupContent += `<p class="text-xs"><span class="font-medium">${key}:</span> ${item.details[key]}</p>`;
+                    }
+
+                    // Handle location markers (still using simple offsetting for markers if they overlap)
+                    if (item.location) {
+                        const originalLatLng = [item.location.lat, item.location.lng];
+                        const latLngKey = `${originalLatLng[0]},${originalLatLng[1]}`;
+                        let actualLatLng = originalLatLng;
+
+                        // Simple offset for markers if they are at the exact same spot
+                        let markerOffsetCount = uniqueLocations.has(item.location.name) ? (uniqueLocations.get(item.location.name)._latlngs ? uniqueLocations.get(item.location.name)._latlngs.length : 0) : 0;
+                        if (markerOffsetCount > 0) {
+                            const offsetMagnitude = 0.002 * markerOffsetCount;
+                            actualLatLng = [originalLatLng[0] + (markerOffsetCount % 2 === 0 ? offsetMagnitude : -offsetMagnitude),
+                                            originalLatLng[1] + (markerOffsetCount % 3 === 0 ? offsetMagnitude : -offsetMagnitude * 0.5)];
+                        }
+
+                        let markerInstance; // Declare markerInstance here
+                        if (!uniqueLocations.has(item.location.name)) {
+                            markerInstance = L.marker(actualLatLng).addTo(map)
+                                .bindPopup(`<b>${item.location.name}</b><br>${popupContent}`);
+                            uniqueLocations.set(item.location.name, markerInstance);
+                        } else {
+                            // If location already has a marker, retrieve it and append info to its popup
+                            markerInstance = uniqueLocations.get(item.location.name);
+                            markerInstance.setPopupContent(markerInstance.getPopup().getContent() + `<hr class="my-1 border-gray-200"><b>${item.description}</b><br>${popupContent}`);
+                        }
+                        bounds.push(actualLatLng);
+
+                        // Add tooltip for places of stay (hotels, accommodations)
+                        if (item.type === 'hotel' || item.type === 'accommodation') {
+                            let tooltipText = `<b>${item.description}</b><br>${item.date}`;
+                            if (item.details['Booking #']) {
+                                tooltipText += `<br>Booking #: ${item.details['Booking #']}`;
+                            } else if (item.details['Confirmation #']) {
+                                tooltipText += `<br>Confirmation #: ${item.details['Confirmation #']}`;
+                            }
+                            markerInstance.bindTooltip(tooltipText, { permanent: false, direction: 'top', className: 'bg-white text-gray-800 p-2 rounded-md shadow-md text-sm' });
+                        }
+                    }
+
+                    // Handle polylines for 'from' to 'to' points
+                    if (item.from && item.to) {
+                        const originalFromLatLng = [item.from.lat, item.from.lng];
+                        const originalToLatLng = [item.to.lat, item.to.lng];
+
+                        // Determine line color based on journey type
+                        let lineColor = item.status === 'completed' ? '#10b981' : '#f59e0b'; // Default to status color
+
+                        // Specific colors for outbound/return journeys
+                        if (item.from.name === 'Copenhagen' && item.to.name === 'Washington D.C.') {
+                            lineColor = '#3b82f6'; // Blue for outbound
+                        } else if (item.from.name === 'Washington D.C.' && item.to.name === 'Copenhagen') {
+                            lineColor = '#10b981'; // Green for return
+                        }
+
+                        // Use a key for the route (from-to) to alternate curve direction for overlapping routes
+                        const routeKey = `${item.from.name}-${item.to.name}`;
+                        let routeCount = handledRoutes.get(routeKey) || 0;
+                        handledRoutes.set(routeKey, routeCount + 1);
+
+                        // Alternate curve direction for overlapping routes
+                        const offsetDirection = (routeCount % 2 === 0) ? 1 : -1; // 1 for one side, -1 for the other
+                        const curveMagnitude = 0.5; // Adjust this value for more or less curve
+
+                        const curvedPath = getCurvedPath(
+                            originalFromLatLng[0], originalFromLatLng[1],
+                            originalToLatLng[0], originalToLatLng[1],
+                            curveMagnitude, offsetDirection
+                        );
+
+                        const polyline = L.polyline(curvedPath, {
+                            color: lineColor,
+                            weight: 3,
+                            opacity: 0.7
+                        }).addTo(map);
+
+                        polyline.bindTooltip(`<b>${item.description}</b><br>${item.date}`, { permanent: false, direction: 'auto' });
+                        // Add all points of the curved path to bounds for fitting the map
+                        curvedPath.forEach(point => bounds.push([point.lat, point.lng]));
+                    }
+                });
+
+                // Fit map to all bounds
+                if (bounds.length > 0) {
+                    map.fitBounds(bounds, { padding: [50, 50] });
+                }
+
+                // Invalidate map size after everything is loaded and rendered
+                map.invalidateSize();
+
+            } catch (error) {
+                console.error("Error initializing map:", error);
+            }
+        }
+
+        // Run functions when the DOM is fully loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            renderItinerary();
+
+            // Polling mechanism to ensure Leaflet (L) is defined before initializing the map
+            const checkLeafletInterval = setInterval(() => {
+                if (typeof L !== 'undefined' && L !== null) {
+                    clearInterval(checkLeafletInterval); // Stop polling
+                    console.log("Leaflet (L) is now defined. Initializing map.");
+                    initializeMap();
+                } else {
+                    console.log("Leaflet (L) not yet defined. Waiting...");
+                }
+            }, 50); // Check every 50 milliseconds
+        });
+    </script>
+</body>
+</html>
